@@ -1,0 +1,94 @@
+---
+title: "DBS Projekt"
+author: "Siaw Hui Ngu"
+date: "7/2/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+pacman::p_load(tidyverse, ggalt, dplyr, patchwork, hrbrthemes, ggplot2)
+```
+
+## PHASE 2: Datenbereinigung und Datenimport
+### a) Import data
+```{r, include=TRUE, results="hide"}
+data_file_1 <- file.path("D:/Bioinformatik/Semester4_SS21/Datenbanksysteme/Project", "_suicide_rate.csv")
+
+data_file_2 <- file.path("D:/Bioinformatik/Semester4_SS21/Datenbanksysteme/Project", "gdp.csv")
+
+suicide <- read_csv(data_file_1) %>% 
+  select(-c('HDI for year', 'suicides/100k pop')) %>%
+  dplyr::rename(gdp_for_year = 'gdp_for_year ($)', 
+         gdp_per_capita = 'gdp_per_capita ($)', 
+         country_year = 'country-year') %>%
+  as.data.frame()
+
+gdp <- read_csv(data_file_2) %>%
+  as.data.frame()
+```
+
+### b) Tidy data:
+#### First, we tidy suicide_rate data by excluding countries with <= 3 years of data. From minimum_years, we know that there are 7 countries which have <= 3 years of data. Thus, 7 countries are removed.
+```{r}
+suicide <- suicide %>%
+  filter(year != 2016) %>% # first exclude 2016 data, because the data from Mongolia is not complete
+  select(-country_year)
+
+minimum_years <- suicide %>%
+  group_by(country) %>%
+  dplyr::summarize(rows = n(), 
+            years = rows / 12) %>%
+  arrange(years)
+
+suicide <- suicide %>%
+  filter(!(country %in% head(minimum_years$country, 7))) 
+
+suicide <- as_tibble(suicide)
+```
+
+#### Then, we tidy gdp data by excluding years < 1985 or >= 2016, because the data in suicide_rate is starting from 1985 and ending in 2015.
+```{r}
+gdp <- gdp[ -c(61:66) ]
+gdp <- gdp[ -c(5:29) ]
+```
+
+
+## PHASE 3: Visualisierung des Datensatzes
+### First graph: Global Suicides
+```{r}
+suicide %>%
+  group_by(year) %>%
+  dplyr::summarize(population = sum(population), 
+        suicides = sum(suicides_no), 
+        suicides_per_100k = (suicides / population) * 100000) %>%
+  ggplot(aes(x = year, y = suicides_per_100k)) + 
+  geom_line(col = "deepskyblue3", size = 1) + 
+  geom_point(col = "deepskyblue3", size = 2) + 
+  labs(title = "Global Suicides (per 100k)",
+       subtitle = "Trend over time, 1985 - 2015.",
+       x = "Year", 
+       y = "Suicides per 100k") +
+  scale_x_continuous(breaks = seq(1985, 2015, 2)) + 
+  scale_y_continuous(breaks = seq(10, 20))
+```
+
+
+### Second graph: Global GDP
+```{r}
+sum_gdp <- as.data.frame(mapply(sum,gdp[,c(5:35)],na.rm=TRUE))
+sum_gdp <- sum_gdp %>% mutate(year = 1985:2015)
+colnames(sum_gdp) <- c("global_gdp", "year")
+
+ggplot(sum_gdp, aes(x = year, y = global_gdp)) + 
+  geom_line(col = "deepskyblue3", size = 1) + 
+  geom_point(col = "deepskyblue3", size = 2) + 
+  labs(title = "Global GDP",
+       subtitle = "Trend over time, 1985 - 2015.",
+       x = "Year", 
+       y = "GDP ($)") +
+  scale_x_continuous(breaks = seq(1985, 2015, 2))
+```
+
+### Conclusion:
+#### As we see, starting from year 1995, the suicide rate is negatively correlated to GDP.
